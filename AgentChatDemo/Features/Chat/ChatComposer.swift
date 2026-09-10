@@ -16,6 +16,12 @@ struct ChatComposer: View {
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
+                // Free-form prose: opt out of AutoFill so the system stops
+                // trying to anchor an OTP/one-time-code popover to it (noisy on
+                // Mac Catalyst, which has no software keyboard rect).
+                .textContentType(nil)
+                .textInputAutocapitalization(.sentences)
+                .autocorrectionDisabled(false)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.fill.tertiary, in: .rect(cornerRadius: 18))
