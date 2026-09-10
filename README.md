@@ -5,28 +5,63 @@ show a Senior/Lead-level split between **SwiftUI**, **UIKit**, **Swift
 Concurrency**, and **Foundation Models** — without ceremony. No third-party
 dependencies.
 
+```mermaid
+flowchart TD
+    subgraph SW["SwiftUI (main actor)"]
+        App["AgentChatDemoApp"]
+        Screen["ChatScreen — shell, states, jump-to-bottom"]
+        Composer["ChatComposer — text field, Send / Stop"]
+        App --> Screen
+        Screen --> Composer
+    end
+
+    subgraph UI["UIKit (main actor) — renderer only"]
+        Bridge["ChatTimelineView : UIViewControllerRepresentable"]
+        VC["ChatTimelineViewController — UICollectionView + DiffableDataSource"]
+        Cell["ChatMessageCell — reuse, self-sizing"]
+        Bridge --> VC --> Cell
+    end
+
+    Store[["ConversationStore<br/>@MainActor @Observable<br/>SINGLE SOURCE OF TRUTH<br/>generation Task, request-ID guard, coalescing"]]
+
+    subgraph PE["Persistence"]
+        Repo[/"MessageRepository (protocol)<br/>loadLatest, loadBefore, save, update"/]
+        Mem["InMemoryMessageRepository — actor, 30/30 paging, demo seed"]
+        Repo -. impl .-> Mem
+    end
+
+    subgraph AL["AI — off the main actor"]
+        Svc[/"AIService (protocol)<br/>cumulative-snapshot stream, AIAvailability"/]
+        Mock["MockAIService — deterministic"]
+        FM["FoundationModelsAIService — actor"]
+        Session["LanguageModelSession — one per conversation, multi-turn"]
+        Tool["LocalKnowledgeTool — @Generable, deterministic"]
+        Svc -. impl .-> Mock
+        Svc -. impl .-> FM
+        FM --> Session
+        Session -->|tool loop| Tool
+    end
+
+    Screen -->|"messages · scroll-to-bottom token"| Bridge
+    VC -->|"didReachTop · bottomStateChanged"| Screen
+    Composer -->|"send() · stopGeneration()"| Store
+    Store -->|"messages []"| Screen
+    Store <-->|"load / save / update"| Repo
+    Store -->|"streamResponse(to:)"| Svc
+
+    classDef sw fill:#e8f0fe,stroke:#4285f4,color:#202124
+    classDef ui fill:#fef7e0,stroke:#f9ab00,color:#202124
+    classDef store fill:#e6f4ea,stroke:#34a853,color:#202124
+    classDef ai fill:#f3e8fd,stroke:#a142f4,color:#202124
+    classDef pe fill:#f1f3f4,stroke:#80868b,color:#202124
+    class App,Screen,Composer sw
+    class Bridge,VC,Cell ui
+    class Store store
+    class Svc,Mock,FM,Session,Tool ai
+    class Repo,Mem pe
 ```
-                    SwiftUI App
-                         |
-                    ChatScreen
-                  /              \
-                 /                \
-      UICollectionView        SwiftUI Composer
-        Chat Timeline
-                 \                /
-                  \              /
-                 ConversationStore          (@MainActor @Observable — source of truth)
-                         |
-              --------------------
-              |                  |
-       MessageRepository      AIService
-              |                  |
-          Local Store     Foundation Models
-                                |
-                       LanguageModelSession
-                                |
-                              Tools
-```
+
+<sub>Read it top-down: SwiftUI owns the shell and composer; UIKit renders the transcript and reports scroll events back; **`ConversationStore` is the only place business state lives**; it talks to persistence and to an `AIService` it never has to know is on-device, mock, or remote.</sub>
 
 ## Build & run
 
