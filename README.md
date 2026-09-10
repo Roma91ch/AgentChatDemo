@@ -66,12 +66,27 @@ flowchart TD
 ## Build & run
 
 - Xcode 27 / iOS 26+ SDK, Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`).
-- Scheme **AgentChatDemo** → run on any iOS 26 Simulator or device.
+- **iOS** — scheme **AgentChatDemo**, any iOS 26 Simulator or device.
+- **Mac (Mac Catalyst)** — same scheme, pick **My Mac (Mac Catalyst)**, or
+  `xcodebuild build -scheme AgentChatDemo -destination 'platform=macOS,variant=Mac Catalyst'`.
+  The full UIKit `UICollectionView` timeline runs unchanged; the point is to
+  step through `FoundationModelsAIService` / `LocalKnowledgeTool` against the
+  real model with Xcode's debugger.
 - Tests: `xcodebuild test -scheme AgentChatDemo -destination 'platform=iOS Simulator,name=iPhone 17'`
+  (or `-destination 'platform=macOS,variant=Mac Catalyst'`).
 
 The Simulator has no Apple Intelligence, so the app starts on **MockAIService**.
 The debug menu (ladybug, top-right) switches to the real Foundation Model, seeds
-1,000 messages, or clears the conversation.
+1,000 messages, or clears the conversation. The real model needs **Apple
+Intelligence enabled in System Settings**; otherwise the app shows the mapped
+`AIAvailability` banner and stays on the mock — which is itself the
+unavailable-state path this demo is meant to exercise.
+
+> Running/debugging a Mac Catalyst (or "Designed for iPad") build **on this Mac**
+> also requires the Xcode version to match the installed macOS build. With an
+> Xcode beta on a newer macOS you may see *"Xcode doesn't support My Mac's
+> macOS …"* on the run destination — the target still **compiles** for Catalyst;
+> use a matching Xcode to launch it.
 
 ---
 
