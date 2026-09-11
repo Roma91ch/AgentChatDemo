@@ -10,8 +10,12 @@ final class ChatMessageCell: UICollectionViewCell {
     private let footnoteLabel = UILabel()
     private let stack = UIStackView()
 
-    private var leadingConstraint: NSLayoutConstraint!
-    private var trailingConstraint: NSLayoutConstraint!
+    /// Exactly one of these is active at a time (left for assistant, right for
+    /// user). Priority 999, not required: if a reuse ever activates both for an
+    /// instant, the engine drops one silently instead of logging an
+    /// unsatisfiable-constraints break during the self-sizing pass.
+    private var leadingPin: NSLayoutConstraint!
+    private var trailingPin: NSLayoutConstraint!
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -44,14 +48,18 @@ final class ChatMessageCell: UICollectionViewCell {
         stack.addArrangedSubview(messageLabel)
         stack.addArrangedSubview(footnoteLabel)
 
-        leadingConstraint = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor)
-        trailingConstraint = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
-        leadingConstraint.priority = .required
-        trailingConstraint.priority = .required
+        leadingPin = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor)
+        trailingPin = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
+        leadingPin.priority = .init(999)
+        trailingPin.priority = .init(999)
 
         NSLayoutConstraint.activate([
             bubble.topAnchor.constraint(equalTo: contentView.topAnchor),
             bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            // Always-on guards: the bubble stays inside the cell and never wider
+            // than 78%, regardless of which pin is active.
+            bubble.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor),
+            bubble.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor),
             bubble.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.78),
 
             stack.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 10),
@@ -73,10 +81,15 @@ final class ChatMessageCell: UICollectionViewCell {
         bubble.backgroundColor = isUser ? .tintColor : .secondarySystemBackground
         messageLabel.textColor = isUser ? .white : .label
 
-        // Exactly one alignment constraint is ever active; setting the pair every
-        // time is a no-op when unchanged and avoids an ambiguous-layout window.
-        leadingConstraint.isActive = !isUser
-        trailingConstraint.isActive = isUser
+        // Deactivate the unwanted pin *before* activating the wanted one so the
+        // two are never both active, even for an instant mid-reuse.
+        if isUser {
+            leadingPin.isActive = false
+            trailingPin.isActive = true
+        } else {
+            trailingPin.isActive = false
+            leadingPin.isActive = true
+        }
 
         var footnote: String?
         switch message.status {
@@ -107,6 +120,6 @@ final class ChatMessageCell: UICollectionViewCell {
         footnoteLabel.isHidden = true
         bubble.backgroundColor = nil
         accessibilityLabel = nil
-        // Alignment constraints are left as-is: `configure` always sets both.
+        // Alignment pins are left as-is: `configure` always sets exactly one.
     }
 }
